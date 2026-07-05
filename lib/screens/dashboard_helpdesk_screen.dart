@@ -2,50 +2,56 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/ticket_model.dart';
 import '../providers/app_provider.dart';
-import 'create_ticket_screen.dart';
 import 'ticket_list_screen.dart';
 import 'notification_screen.dart';
 import 'profile_screen.dart';
 
-class DashboardUserScreen extends StatefulWidget {
-  const DashboardUserScreen({super.key});
+class DashboardHelpdeskScreen extends StatefulWidget {
+  const DashboardHelpdeskScreen({super.key});
+
   @override
-  State<DashboardUserScreen> createState() => _DashboardUserScreenState();
+  State<DashboardHelpdeskScreen> createState() =>
+      _DashboardHelpdeskScreenState();
 }
 
-class _DashboardUserScreenState extends State<DashboardUserScreen> {
+class _DashboardHelpdeskScreenState extends State<DashboardHelpdeskScreen> {
   int _selectedIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     final pages = [
-      _HomeTab(),
-      const TicketListScreen(),
+      const _HelpdeskHomeTab(),
+      const TicketListScreen(isHelpdesk: true),
       const NotificationScreen(),
       const ProfileScreen(),
     ];
+
     return Scaffold(
       body: pages[_selectedIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Beranda',
+        destinations: [
+          const NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Dashboard',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.list_alt_outlined),
             selectedIcon: Icon(Icons.list_alt),
-            label: 'Tiket',
+            label: 'Tugas',
           ),
           NavigationDestination(
-            icon: Icon(Icons.notifications_outlined),
-            selectedIcon: Icon(Icons.notifications),
+            icon: Badge(
+              isLabelVisible: false,
+              label: const Text(''),
+              child: const Icon(Icons.notifications_outlined),
+            ),
+            selectedIcon: const Icon(Icons.notifications),
             label: 'Notifikasi',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.person_outline),
             selectedIcon: Icon(Icons.person),
             label: 'Profil',
@@ -56,12 +62,14 @@ class _DashboardUserScreenState extends State<DashboardUserScreen> {
   }
 }
 
-class _HomeTab extends StatelessWidget {
+class _HelpdeskHomeTab extends StatelessWidget {
+  const _HelpdeskHomeTab();
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
     final scheme = Theme.of(context).colorScheme;
-    final myTickets = provider.myTickets;
+    final tasks = provider.assignedTickets;
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -82,7 +90,7 @@ class _HomeTab extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'Ada masalah IT? Laporkan sekarang.',
+                      'Kelola tiket yang ditugaskan kepada Anda.',
                       style: TextStyle(
                         color: scheme.onSurfaceVariant,
                         fontSize: 13,
@@ -92,69 +100,44 @@ class _HomeTab extends StatelessWidget {
                 ),
                 CircleAvatar(
                   backgroundColor: scheme.primaryContainer,
-                  child: Icon(Icons.person, color: scheme.primary),
+                  child: Icon(Icons.support_agent, color: scheme.primary),
                 ),
               ],
             ),
             const SizedBox(height: 24),
-            // Stats row
             Row(
               children: [
                 _StatCard(
-                  label: 'Tiket Saya',
-                  value: myTickets.length,
+                  label: 'Tugas Saya',
+                  value: tasks.length,
                   icon: Icons.confirmation_number,
                   color: scheme.primary,
                 ),
                 const SizedBox(width: 12),
                 _StatCard(
-                  label: 'Dalam Proses',
-                  value: myTickets
-                      .where((t) => t.status == 'on_progress')
-                      .length,
+                  label: 'Diproses',
+                  value: tasks.where((t) => t.status == 'on_progress').length,
                   icon: Icons.pending_actions,
                   color: Colors.orange,
                 ),
                 const SizedBox(width: 12),
                 _StatCard(
                   label: 'Selesai',
-                  value: myTickets.where((t) => t.status == 'completed').length,
+                  value: tasks.where((t) => t.status == 'completed').length,
                   icon: Icons.check_circle_outline,
                   color: Colors.green,
                 ),
               ],
             ),
             const SizedBox(height: 24),
-            // Quick action button
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const CreateTicketScreen()),
-                ),
-                icon: const Icon(Icons.add),
-                label: const Text(
-                  'Buat Tiket Baru',
-                  style: TextStyle(fontSize: 16),
-                ),
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
             Text(
-              'Tiket Terbaru',
+              'Tiket Ditugaskan',
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-            if (myTickets.isEmpty)
+            if (tasks.isEmpty)
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
@@ -167,7 +150,7 @@ class _HomeTab extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Belum ada tiket',
+                        'Belum ada tugas tiket',
                         style: TextStyle(color: scheme.onSurfaceVariant),
                       ),
                     ],
@@ -175,8 +158,88 @@ class _HomeTab extends StatelessWidget {
                 ),
               )
             else
-              ...myTickets.take(3).map((t) => _TicketTile(ticket: t)),
+              ...tasks.take(4).map((t) => _TaskCard(ticket: t)),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskCard extends StatelessWidget {
+  final TicketModel ticket;
+  const _TaskCard({required this.ticket});
+
+  Color _statusColor(String s) {
+    switch (s) {
+      case 'new':
+        return Colors.blue;
+      case 'on_progress':
+        return Colors.orange;
+      case 'completed':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _statusLabel(String s) {
+    switch (s) {
+      case 'new':
+        return 'Baru';
+      case 'on_progress':
+        return 'Diproses';
+      case 'completed':
+        return 'Selesai';
+      default:
+        return 'Ditutup';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        title: Text(
+          ticket.title,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(ticket.ticketCode, style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 6),
+            Text(
+              ticket.description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: _statusColor(ticket.status).withOpacity(0.15),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(
+            _statusLabel(ticket.status),
+            style: TextStyle(
+              color: _statusColor(ticket.status),
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
         ),
       ),
     );
@@ -223,81 +286,6 @@ class _StatCard extends StatelessWidget {
               style: TextStyle(fontSize: 11, color: color.withOpacity(0.8)),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TicketTile extends StatelessWidget {
-  final TicketModel ticket;
-  const _TicketTile({required this.ticket});
-
-  Color _statusColor(String s) {
-    switch (s) {
-      case 'new':
-        return Colors.blue;
-      case 'on_progress':
-        return Colors.orange;
-      case 'completed':
-        return Colors.green;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  String _statusLabel(String s) {
-    switch (s) {
-      case 'new':
-        return 'Baru';
-      case 'on_progress':
-        return 'Diproses';
-      case 'completed':
-        return 'Selesai';
-      default:
-        return 'Ditutup';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: _statusColor(ticket.status).withOpacity(0.15),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            Icons.confirmation_number_outlined,
-            color: _statusColor(ticket.status),
-            size: 20,
-          ),
-        ),
-        title: Text(
-          ticket.title,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Text(ticket.ticketCode, style: const TextStyle(fontSize: 12)),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: _statusColor(ticket.status).withOpacity(0.15),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            _statusLabel(ticket.status),
-            style: TextStyle(
-              fontSize: 11,
-              color: _statusColor(ticket.status),
-              fontWeight: FontWeight.bold,
-            ),
-          ),
         ),
       ),
     );

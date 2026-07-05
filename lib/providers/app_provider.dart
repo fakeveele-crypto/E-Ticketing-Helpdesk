@@ -1,130 +1,93 @@
-import 'package:flutter/material.dart';
-import '../models/ticket_model.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/notification_model.dart';
+import '../models/ticket_model.dart';
+import '../models/ticket_tracking_model.dart';
 
 class AppProvider extends ChangeNotifier {
   bool _isDarkMode = false;
   UserModel? _currentUser;
   List<TicketModel> _tickets = [];
   List<NotificationModel> _notifications = [];
+  Map<String, List<TicketTrackingModel>> _ticketTracking = {};
+  String? _authErrorMessage;
 
   bool get isDarkMode => _isDarkMode;
   UserModel? get currentUser => _currentUser;
   List<TicketModel> get tickets => _tickets;
+  List<NotificationModel> get notifications => _notifications;
+  Map<String, List<TicketTrackingModel>> get ticketTracking => _ticketTracking;
+  String? get authErrorMessage => _authErrorMessage;
 
-  final List<UserModel> _users = [
-    UserModel(username: 'admin', password: '123456', role: 'admin', name: 'Admin Sistem'),
-    UserModel(username: 'helpdesk1', password: '123456', role: 'helpdesk', name: 'Budi Helpdesk'),
-    UserModel(username: 'user1', password: '123456', role: 'user', name: 'Andi Pengguna'),
-    UserModel(username: 'user2', password: '123456', role: 'user', name: 'Siti Pengguna'),
-  ];
+  AppProvider();
 
-  AppProvider() {
-    _loadDummyData();
+  String _authEmail(String username) {
+    final trimmed = username.trim().toLowerCase();
+    if (trimmed.contains('@')) {
+      return trimmed;
+    }
+    final clean = trimmed.replaceAll(RegExp(r'[^a-z0-9_]'), '_');
+    return '$clean@eticketing.local';
   }
 
-  void _loadDummyData() {
-    _tickets = [
-      TicketModel(
-        id: 'TKT-001',
-        title: 'Komputer tidak bisa menyala',
-        description: 'Komputer di meja saya tiba-tiba tidak bisa dinyalakan sejak kemarin sore.',
-        category: 'Hardware',
-        status: 'open',
-        createdBy: 'user1',
-        createdAt: '2026-04-15 09:00',
-      ),
-      TicketModel(
-        id: 'TKT-002',
-        title: 'Tidak bisa akses email kantor',
-        description: 'Saya tidak bisa login ke email kantor, muncul error "invalid credentials".',
-        category: 'Software',
-        status: 'on_progress',
-        createdBy: 'user1',
-        createdAt: '2026-04-16 10:30',
-        assignedTo: 'helpdesk1',
-        comments: [
-          CommentModel(
-            author: 'helpdesk1',
-            message: 'Sedang kami cek ya, kemungkinan password expired.',
-            timestamp: '2026-04-16 11:00',
-          ),
-        ],
-      ),
-      TicketModel(
-        id: 'TKT-003',
-        title: 'Printer tidak terdeteksi',
-        description: 'Printer di ruang kerja lantai 2 tidak terdeteksi oleh semua komputer.',
-        category: 'Hardware',
-        status: 'resolved',
-        createdBy: 'user2',
-        createdAt: '2026-04-17 08:00',
-        assignedTo: 'helpdesk1',
-      ),
-    ];
-
-    // Dummy notifikasi awal
-    _notifications = [
-      NotificationModel(
-        id: 'NOTIF-001',
-        title: 'Tiket Baru Masuk',
-        message: 'TKT-001: Komputer tidak bisa menyala menunggu penanganan.',
-        ticketId: 'TKT-001',
-        timestamp: '2026-04-15 09:05',
-        targetRole: 'admin',
-        targetUser: 'all',
-      ),
-      NotificationModel(
-        id: 'NOTIF-002',
-        title: 'Tiket Diperbarui',
-        message: 'Tiket TKT-002 kamu sedang diproses oleh helpdesk1.',
-        ticketId: 'TKT-002',
-        timestamp: '2026-04-16 11:00',
-        targetRole: 'user',
-        targetUser: 'user1',
-      ),
-      NotificationModel(
-        id: 'NOTIF-003',
-        title: 'Tiket Selesai',
-        message: 'Tiket TKT-003 kamu telah selesai ditangani.',
-        ticketId: 'TKT-003',
-        timestamp: '2026-04-17 14:00',
-        targetRole: 'user',
-        targetUser: 'user2',
-      ),
-      NotificationModel(
-        id: 'NOTIF-004',
-        title: 'Tiket Baru Masuk',
-        message: 'TKT-002: Tidak bisa akses email kantor butuh perhatian.',
-        ticketId: 'TKT-002',
-        timestamp: '2026-04-16 10:35',
-        targetRole: 'admin',
-        targetUser: 'all',
-      ),
-    ];
+  UserModel _userFromAuthUser(User user) {
+    final metadata = user.userMetadata ?? {};
+    final username =
+        metadata['username']?.toString() ??
+        user.email?.split('@').first ??
+        user.id;
+    final name = metadata['name']?.toString() ?? username;
+    final role = metadata['role']?.toString() ?? 'user';
+    return UserModel(
+      id: user.id,
+      username: username,
+      name: name,
+      role: role,
+      email: user.email ?? '',
+    );
   }
 
-  // ─── Auth ───────────────────────────────────────────────
-  bool login(String username, String password) {
-    final found = _users.where(
-      (u) => u.username == username && u.password == password,
-    ).toList();
-    if (found.isNotEmpty) {
-      _currentUser = found.first;
+  Future<bool> register(String username, String password, String name) async {
+    try {
+      final email = _authEmail(username);
+      final response = await Supabase.instance.client.auth.signUp(
+        email: email,
+        password: password,
+        data: {'username': username, 'name': name, 'role': 'user'},
+      );
+      _authErrorMessage = null;
+      return response.user != null || response.session != null;
+    } catch (error) {
+      _authErrorMessage = error.toString();
+      debugPrint('Register failed: $_authErrorMessage');
+      return false;
+    }
+  }
+
+  Future<bool> login(String username, String password) async {
+    try {
+      final email = _authEmail(username);
+      final response = await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+      if (response.user == null) {
+        return false;
+      }
+      _currentUser = _userFromAuthUser(response.user!);
+      await loadData();
       notifyListeners();
       return true;
+    } catch (_) {
+      return false;
     }
-    return false;
   }
 
-  bool register(String username, String password, String name) {
-    if (_users.any((u) => u.username == username)) return false;
-    _users.add(UserModel(username: username, password: password, role: 'user', name: name));
-    return true;
-  }
-
-  void logout() {
+  Future<void> logout() async {
+    await Supabase.instance.client.auth.signOut();
     _currentUser = null;
+    _tickets = [];
+    _notifications = [];
     notifyListeners();
   }
 
@@ -133,146 +96,353 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Tiket ──────────────────────────────────────────────
-  void createTicket(
+  Future<void> loadData() async {
+    await Future.wait([fetchTickets(), fetchNotifications()]);
+    await fetchTicketTracking();
+  }
+
+  Future<void> fetchTickets() async {
+    final response = await Supabase.instance.client
+        .from('tickets')
+        .select()
+        .order('created_at', ascending: false);
+    final rows = response as List<dynamic>? ?? [];
+    final tickets = rows
+        .map(
+          (row) => TicketModel.fromMap(Map<String, dynamic>.from(row as Map)),
+        )
+        .toList();
+    if (tickets.isNotEmpty) {
+      final ticketIds = tickets.map((t) => t.id).toList();
+      final commentsResponse = await Supabase.instance.client
+          .from('ticket_comments')
+          .select()
+          .inFilter('ticket_id', ticketIds)
+          .order('created_at', ascending: true);
+      final commentRows = commentsResponse as List<dynamic>? ?? [];
+      final commentsByTicket = <String, List<CommentModel>>{};
+      for (final comment in commentRows) {
+        final model = CommentModel.fromMap(
+          Map<String, dynamic>.from(comment as Map),
+        );
+        commentsByTicket.putIfAbsent(model.ticketId, () => []).add(model);
+      }
+      for (final ticket in tickets) {
+        ticket.comments = commentsByTicket[ticket.id] ?? [];
+      }
+    }
+    _tickets = tickets;
+    notifyListeners();
+  }
+
+  Future<void> fetchNotifications() async {
+    final response = await Supabase.instance.client
+        .from('notifications')
+        .select()
+        .order('created_at', ascending: false);
+    final rows = response as List<dynamic>? ?? [];
+    final user = _currentUser;
+    if (user == null) {
+      _notifications = [];
+      return;
+    }
+    _notifications = rows
+        .map(
+          (row) =>
+              NotificationModel.fromMap(Map<String, dynamic>.from(row as Map)),
+        )
+        .where((notif) {
+          return notif.recipientRole == 'all' ||
+              notif.recipientRole == user.role ||
+              notif.recipientId == user.id ||
+              notif.recipientId == user.username;
+        })
+        .toList();
+    notifyListeners();
+  }
+
+  Future<void> createTicket(
     String title,
     String description,
     String category, {
-    List<String> imagePaths = const [],
-  }) {
-    final id = 'TKT-${(_tickets.length + 1).toString().padLeft(3, '0')}';
-    _tickets.add(TicketModel(
-      id: id,
-      title: title,
-      description: description,
-      category: category,
-      status: 'open',
-      createdBy: _currentUser!.username,
-      createdAt: DateTime.now().toString().substring(0, 16),
-      imagePaths: List.from(imagePaths),
-    ));
-    // Tambah notifikasi untuk admin saat tiket baru dibuat
-    _addNotification(
-      title: 'Tiket Baru Masuk',
-      message: '$id: $title menunggu penanganan.',
-      ticketId: id,
-      targetRole: 'admin',
-      targetUser: 'all',
-    );
-    notifyListeners();
+    String? photoPath,
+  }) async {
+    if (_currentUser == null) {
+      throw Exception('User tidak ditemukan. Silakan login ulang.');
+    }
+    final ticketCode = 'TKT-${DateTime.now().millisecondsSinceEpoch}';
+    final authUserId =
+        Supabase.instance.client.auth.currentUser?.id ?? _currentUser!.id;
+    try {
+      final response = await Supabase.instance.client
+          .from('tickets')
+          .insert({
+            'ticket_code': ticketCode,
+            'title': title,
+            'description': description,
+            'category': category,
+            'status': 'new',
+            'priority': 'normal',
+            'url_foto': photoPath?.isEmpty ?? true ? null : photoPath,
+            'created_by': authUserId,
+            'assigned_to': null,
+          })
+          .select()
+          .single();
+      final ticket = TicketModel.fromMap(
+        Map<String, dynamic>.from(response as Map),
+      );
+      _tickets.insert(0, ticket);
+
+      // Add tracking entry for ticket creation
+      await _addTracking(
+        ticketId: ticket.id,
+        action: 'created',
+        description: 'Tiket dibuat oleh ${_currentUser!.name}',
+      );
+
+      // Add notification to admins
+      await _addNotification(
+        title: 'Tiket Baru Masuk',
+        message:
+            'Tiket baru ${ticketCode}: "$title" telah dibuat oleh ${_currentUser!.name}',
+        ticketId: ticket.id,
+        recipientRole: 'admin',
+      );
+
+      notifyListeners();
+    } catch (error) {
+      debugPrint('Create ticket failed: $error');
+      rethrow;
+    }
   }
 
-  void updateTicketStatus(String ticketId, String newStatus) {
+  Future<void> updateTicketStatus(String ticketId, String newStatus) async {
     final idx = _tickets.indexWhere((t) => t.id == ticketId);
     if (idx == -1) return;
-    _tickets[idx].status = newStatus;
-
-    final t = _tickets[idx];
-    final statusLabel = {
-      'open': 'kembali dibuka',
-      'on_progress': 'sedang diproses',
-      'resolved': 'telah selesai',
-      'closed': 'ditutup',
-    }[newStatus] ?? newStatus;
-
-    // Notifikasi ke user pemilik tiket
-    _addNotification(
+    final ticket = _tickets[idx];
+    final normalizedStatus = TicketModel.normalizeStatus(newStatus);
+    await Supabase.instance.client
+        .from('tickets')
+        .update({
+          'status': normalizedStatus,
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', ticketId)
+        .select()
+        .single();
+    ticket.status = normalizedStatus;
+    final statusLabel =
+        {
+          'new': 'kembali dibuka',
+          'on_progress': 'sedang diproses',
+          'completed': 'telah selesai',
+        }[normalizedStatus] ??
+        normalizedStatus;
+    await _addSystemComment(
+      ticketId,
+      'Status tiket diubah menjadi $statusLabel.',
+    );
+    await _addNotification(
       title: 'Status Tiket Diperbarui',
-      message: 'Tiket ${t.id} "${t.title}" $statusLabel.',
-      ticketId: ticketId,
-      targetRole: 'user',
-      targetUser: t.createdBy,
+      message: 'Tiket ${ticket.ticketCode} "${ticket.title}" $statusLabel.',
+      ticketId: ticket.id,
+      recipientId: ticket.createdBy,
     );
     notifyListeners();
   }
 
-  void assignTicket(String ticketId, String assignTo) {
+  Future<void> assignTicket(String ticketId, String assignTo) async {
     final idx = _tickets.indexWhere((t) => t.id == ticketId);
     if (idx == -1) return;
-    _tickets[idx].assignedTo = assignTo;
+    final ticket = _tickets[idx];
+    await Supabase.instance.client
+        .from('tickets')
+        .update({
+          'assigned_to': assignTo,
+          'status': 'on_progress',
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', ticketId)
+        .select()
+        .single();
+    ticket.assignedTo = assignTo;
+    ticket.status = 'on_progress';
+    await _addSystemComment(
+      ticketId,
+      'Tiket ditugaskan kepada $assignTo dan status diubah menjadi Diproses.',
+    );
+    await _addNotification(
+      title: 'Tiket Ditugaskan',
+      message: 'Tiket ${ticket.ticketCode} telah ditugaskan kepada Anda.',
+      ticketId: ticketId,
+      recipientId: assignTo,
+    );
+    await _addNotification(
+      title: 'Tiket Sedang Diproses',
+      message: 'Tiket ${ticket.ticketCode} sedang diproses oleh $assignTo.',
+      ticketId: ticketId,
+      recipientId: ticket.createdBy,
+    );
     notifyListeners();
   }
 
-  void addComment(String ticketId, String message) {
+  Future<void> _addSystemComment(String ticketId, String message) async {
+    if (_currentUser == null) return;
+    final response = await Supabase.instance.client
+        .from('ticket_comments')
+        .insert({
+          'ticket_id': ticketId,
+          'user_id': _currentUser!.username,
+          'message': message,
+        })
+        .select()
+        .single();
+    final comment = CommentModel.fromMap(
+      Map<String, dynamic>.from(response as Map),
+    );
+    final idx = _tickets.indexWhere((t) => t.id == ticketId);
+    if (idx != -1) {
+      _tickets[idx].comments.add(comment);
+    }
+  }
+
+  Future<void> addComment(String ticketId, String message) async {
+    if (_currentUser == null) return;
     final idx = _tickets.indexWhere((t) => t.id == ticketId);
     if (idx == -1) return;
-    _tickets[idx].comments.add(CommentModel(
-      author: _currentUser!.username,
-      message: message,
-      timestamp: DateTime.now().toString().substring(0, 16),
-    ));
-    // Kalau helpdesk/admin komen → notif ke user
+    final response = await Supabase.instance.client
+        .from('ticket_comments')
+        .insert({
+          'ticket_id': ticketId,
+          'user_id': _currentUser!.username,
+          'message': message,
+        })
+        .select()
+        .single();
+    final comment = CommentModel.fromMap(
+      Map<String, dynamic>.from(response as Map),
+    );
+    _tickets[idx].comments.add(comment);
     if (_currentUser!.role != 'user') {
-      _addNotification(
+      await _addNotification(
         title: 'Komentar Baru di Tiket',
-        message: '${_currentUser!.name} membalas tiket ${_tickets[idx].id}.',
+        message:
+            '${_currentUser!.name} membalas tiket ${_tickets[idx].ticketCode}.',
         ticketId: ticketId,
-        targetRole: 'user',
-        targetUser: _tickets[idx].createdBy,
+        recipientId: _tickets[idx].createdBy,
       );
     }
     notifyListeners();
   }
 
-  // ─── Notifikasi ─────────────────────────────────────────
-  void _addNotification({
+  Future<void> _addNotification({
     required String title,
     required String message,
     required String ticketId,
-    required String targetRole,
-    required String targetUser,
-  }) {
-    _notifications.insert(
-      0,
-      NotificationModel(
-        id: 'NOTIF-${_notifications.length + 1}',
-        title: title,
-        message: message,
-        ticketId: ticketId,
-        timestamp: DateTime.now().toString().substring(0, 16),
-        targetRole: targetRole,
-        targetUser: targetUser,
-      ),
+    String? recipientId,
+    String? recipientRole,
+  }) async {
+    if (recipientId == null && recipientRole == null) {
+      throw Exception('Notification must have a recipientId or recipientRole');
+    }
+
+    final payload = <String, dynamic>{
+      'ticket_id': ticketId,
+      'title': title,
+      'message': message,
+      'is_read': false,
+    };
+
+    if (recipientRole != null) {
+      payload['recipient_role'] = recipientRole;
+      payload['recipient_id'] = null;
+    } else {
+      payload['recipient_id'] = recipientId;
+      payload['recipient_role'] = null;
+    }
+
+    final response = await Supabase.instance.client
+        .from('notifications')
+        .insert(payload)
+        .select()
+        .single();
+    final notification = NotificationModel.fromMap(
+      Map<String, dynamic>.from(response as Map),
     );
+    _notifications.insert(0, notification);
+    notifyListeners();
   }
 
-  /// Notifikasi yang relevan untuk user yang sedang login
   List<NotificationModel> get myNotifications {
     final user = _currentUser;
     if (user == null) return [];
     return _notifications.where((n) {
-      final roleMatch = n.targetRole == user.role ||
-          n.targetRole == 'all' ||
-          (user.role == 'admin' && n.targetRole == 'admin') ||
-          (user.role == 'helpdesk' && n.targetRole == 'admin');
-      final userMatch = n.targetUser == 'all' || n.targetUser == user.username;
-      return roleMatch && userMatch;
+      return n.recipientRole == 'all' ||
+          n.recipientRole == user.role ||
+          n.recipientId == user.id ||
+          n.recipientId == user.username;
     }).toList();
   }
 
   int get unreadCount => myNotifications.where((n) => !n.isRead).length;
 
-  void markAllRead() {
-    for (final n in _notifications) {
-      n.isRead = true;
+  Future<void> markAllRead() async {
+    final ids = myNotifications.map((n) => n.id).toList();
+    if (ids.isEmpty) return;
+    await Supabase.instance.client
+        .from('notifications')
+        .update({'is_read': true})
+        .inFilter('id', ids);
+    for (final notif in _notifications) {
+      if (ids.contains(notif.id)) {
+        notif.isRead = true;
+      }
     }
     notifyListeners();
   }
 
-  void markOneRead(String notifId) {
+  Future<void> markOneRead(String notifId) async {
+    await Supabase.instance.client
+        .from('notifications')
+        .update({'is_read': true})
+        .eq('id', notifId);
     final idx = _notifications.indexWhere((n) => n.id == notifId);
-    if (idx != -1) _notifications[idx].isRead = true;
-    notifyListeners();
+    if (idx != -1) {
+      _notifications[idx].isRead = true;
+      notifyListeners();
+    }
   }
 
-  // ─── Getters ─────────────────────────────────────────────
-  List<TicketModel> get myTickets =>
-      _tickets.where((t) => t.createdBy == _currentUser?.username).toList();
+  List<TicketModel> get myTickets {
+    final user = _currentUser;
+    if (user == null) return [];
+    return _tickets.where((t) {
+      return t.createdBy == user.id || t.createdBy == user.username;
+    }).toList();
+  }
+
+  List<TicketModel> get assignedTickets {
+    final user = _currentUser;
+    if (user == null) return [];
+    return _tickets.where((t) {
+      return t.assignedTo == user.id || t.assignedTo == user.username;
+    }).toList();
+  }
+
+  List<TicketModel> get unassignedTickets => _tickets
+      .where((t) => t.assignedTo == null || t.assignedTo!.isEmpty)
+      .toList();
 
   int get totalTickets => _tickets.length;
-  int get openTickets => _tickets.where((t) => t.status == 'open').length;
-  int get onProgressTickets => _tickets.where((t) => t.status == 'on_progress').length;
-  int get resolvedTickets => _tickets.where((t) => t.status == 'resolved').length;
+  int get openTickets => _tickets.where((t) => t.status == 'new').length;
+  int get inProgressTickets =>
+      _tickets.where((t) => t.status == 'on_progress').length;
+  int get closedTickets =>
+      _tickets.where((t) => t.status == 'completed').length;
+  int get assignedTicketCount => _tickets
+      .where((t) => t.assignedTo != null && t.assignedTo!.isNotEmpty)
+      .length;
 
   TicketModel? getTicketById(String id) {
     try {
@@ -280,5 +450,337 @@ class AppProvider extends ChangeNotifier {
     } catch (_) {
       return null;
     }
+  }
+
+  // ============ TICKET WORKFLOW METHODS ============
+
+  /// Admin accepts the ticket from user
+  Future<void> acceptTicketAsAdmin(String ticketId) async {
+    if (_currentUser == null || _currentUser!.role == 'user') {
+      throw Exception('Hanya admin yang dapat menerima tiket.');
+    }
+
+    final idx = _tickets.indexWhere((t) => t.id == ticketId);
+    if (idx == -1) return;
+
+    final ticket = _tickets[idx];
+    final now = DateTime.now().toIso8601String();
+
+    // Update ticket in database
+    await Supabase.instance.client
+        .from('tickets')
+        .update({'received_by_admin_at': now, 'updated_at': now})
+        .eq('id', ticketId)
+        .select()
+        .single();
+
+    ticket.receivedByAdminAt = now;
+
+    // Add tracking entry
+    await _addTracking(
+      ticketId: ticketId,
+      action: 'accepted_by_admin',
+      description: 'Tiket diterima oleh admin ${_currentUser!.name}',
+    );
+
+    // Notify ticket creator
+    await _addNotification(
+      title: 'Tiket Diterima Admin',
+      message:
+          'Tiket ${ticket.ticketCode} "${ticket.title}" telah diterima oleh admin.',
+      ticketId: ticketId,
+      recipientId: ticket.createdBy,
+    );
+
+    notifyListeners();
+  }
+
+  /// Admin forwards ticket to helpdesk (assigns to helpdesk role)
+  Future<void> forwardTicketToHelpdesk(
+    String ticketId,
+    String helpdeskUserId,
+  ) async {
+    if (_currentUser == null || _currentUser!.role == 'user') {
+      throw Exception('Hanya admin yang dapat memforward tiket ke helpdesk.');
+    }
+
+    final idx = _tickets.indexWhere((t) => t.id == ticketId);
+    if (idx == -1) return;
+
+    final ticket = _tickets[idx];
+    final now = DateTime.now().toIso8601String();
+
+    // Update ticket in database
+    await Supabase.instance.client
+        .from('tickets')
+        .update({
+          'assigned_to': helpdeskUserId,
+          'status': 'on_progress',
+          'forwarded_to_helpdesk_at': now,
+          'updated_at': now,
+        })
+        .eq('id', ticketId)
+        .select()
+        .single();
+
+    ticket.assignedTo = helpdeskUserId;
+    ticket.status = 'on_progress';
+    ticket.forwardedToHelpdeskAt = now;
+
+    // Add tracking entry
+    await _addTracking(
+      ticketId: ticketId,
+      action: 'forwarded_to_helpdesk',
+      description:
+          'Tiket diforward ke helpdesk oleh admin ${_currentUser!.name}',
+    );
+
+    // Add system comment
+    await _addSystemComment(
+      ticketId,
+      'Tiket diforward ke helpdesk oleh ${_currentUser!.name} untuk ditangani.',
+    );
+
+    // Notify helpdesk
+    await _addNotification(
+      title: 'Tiket Baru dari Admin',
+      message:
+          'Anda menerima tiket baru ${ticket.ticketCode}: "${ticket.title}"',
+      ticketId: ticketId,
+      recipientId: helpdeskUserId,
+    );
+
+    // Notify ticket creator
+    await _addNotification(
+      title: 'Tiket Sedang Diproses Helpdesk',
+      message: 'Tiket ${ticket.ticketCode} sedang diproses oleh tim helpdesk.',
+      ticketId: ticketId,
+      recipientId: ticket.createdBy,
+    );
+
+    notifyListeners();
+  }
+
+  /// Helpdesk accepts the ticket
+  Future<void> acceptTicketAsHelpdesk(String ticketId) async {
+    if (_currentUser == null || _currentUser!.role != 'helpdesk') {
+      throw Exception('Hanya helpdesk yang dapat menerima tiket.');
+    }
+
+    final idx = _tickets.indexWhere((t) => t.id == ticketId);
+    if (idx == -1) return;
+
+    final ticket = _tickets[idx];
+    final now = DateTime.now().toIso8601String();
+
+    // Update ticket in database
+    await Supabase.instance.client
+        .from('tickets')
+        .update({'status': 'on_progress', 'updated_at': now})
+        .eq('id', ticketId)
+        .select()
+        .single();
+
+    ticket.status = 'on_progress';
+
+    // Add tracking entry
+    await _addTracking(
+      ticketId: ticketId,
+      action: 'accepted_by_helpdesk',
+      description: 'Tiket diterima oleh helpdesk ${_currentUser!.name}',
+    );
+
+    // Add system comment
+    await _addSystemComment(
+      ticketId,
+      'Tiket sedang ditangani oleh ${_currentUser!.name}.',
+    );
+
+    // Notify ticket creator
+    await _addNotification(
+      title: 'Tiket Sedang Ditangani',
+      message: 'Tiket ${ticket.ticketCode} sedang ditangani oleh helpdesk.',
+      ticketId: ticketId,
+      recipientId: ticket.createdBy,
+    );
+
+    // Notify admin
+    await _addNotification(
+      title: 'Helpdesk Sedang Menangani Tiket',
+      message:
+          'Tiket ${ticket.ticketCode} sedang ditangani oleh ${_currentUser!.name}.',
+      ticketId: ticketId,
+      recipientRole: 'admin',
+    );
+
+    notifyListeners();
+  }
+
+  /// Helpdesk completes the ticket
+  Future<void> completeTicketByHelpdesk(String ticketId) async {
+    if (_currentUser == null || _currentUser!.role != 'helpdesk') {
+      throw Exception('Hanya helpdesk yang dapat menyelesaikan tiket.');
+    }
+
+    final idx = _tickets.indexWhere((t) => t.id == ticketId);
+    if (idx == -1) return;
+
+    final ticket = _tickets[idx];
+    final now = DateTime.now().toIso8601String();
+
+    // Update ticket in database
+    await Supabase.instance.client
+        .from('tickets')
+        .update({'status': 'completed', 'completed_at': now, 'updated_at': now})
+        .eq('id', ticketId)
+        .select()
+        .single();
+
+    ticket.status = 'completed';
+    ticket.completedAt = now;
+
+    // Add tracking entry
+    await _addTracking(
+      ticketId: ticketId,
+      action: 'completed',
+      description: 'Tiket diselesaikan oleh helpdesk ${_currentUser!.name}',
+    );
+
+    // Add system comment
+    await _addSystemComment(
+      ticketId,
+      'Tiket telah diselesaikan oleh ${_currentUser!.name}.',
+    );
+
+    // Notify ticket creator
+    await _addNotification(
+      title: 'Tiket Selesai',
+      message:
+          'Tiket ${ticket.ticketCode} "${ticket.title}" telah diselesaikan.',
+      ticketId: ticketId,
+      recipientId: ticket.createdBy,
+    );
+
+    // Notify admin
+    await _addNotification(
+      title: 'Tiket Diselesaikan',
+      message:
+          'Tiket ${ticket.ticketCode} telah diselesaikan oleh ${_currentUser!.name}.',
+      ticketId: ticketId,
+      recipientRole: 'admin',
+    );
+
+    notifyListeners();
+  }
+
+  /// Add tracking entry for ticket status changes
+  Future<void> _addTracking({
+    required String ticketId,
+    required String action,
+    required String description,
+  }) async {
+    try {
+      final user = _currentUser;
+      if (user == null) return;
+
+      final response = await Supabase.instance.client
+          .from('ticket_tracking')
+          .insert({
+            'ticket_id': ticketId,
+            'action': action,
+            'actor_id': user.id,
+            'actor_name': user.name,
+            'actor_role': user.role,
+            'description': description,
+            'created_at': DateTime.now().toIso8601String(),
+          })
+          .select()
+          .single();
+
+      final tracking = TicketTrackingModel.fromMap(
+        Map<String, dynamic>.from(response as Map),
+      );
+
+      _ticketTracking.putIfAbsent(ticketId, () => []).add(tracking);
+    } catch (error) {
+      debugPrint('Add tracking failed: $error');
+    }
+  }
+
+  /// Fetch ticket tracking history
+  Future<void> fetchTicketTracking() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('ticket_tracking')
+          .select()
+          .order('created_at', ascending: true);
+
+      final rows = response as List<dynamic>? ?? [];
+      _ticketTracking.clear();
+
+      for (final row in rows) {
+        final tracking = TicketTrackingModel.fromMap(
+          Map<String, dynamic>.from(row as Map),
+        );
+        _ticketTracking.putIfAbsent(tracking.ticketId, () => []).add(tracking);
+      }
+
+      notifyListeners();
+    } catch (error) {
+      debugPrint('Fetch ticket tracking failed: $error');
+    }
+  }
+
+  /// Get tracking history for a specific ticket
+  List<TicketTrackingModel> getTicketTrackingHistory(String ticketId) {
+    return _ticketTracking[ticketId] ?? [];
+  }
+
+  /// Get a formatted tracking summary for display
+  String getTrackingSummary(String ticketId) {
+    final tracking = getTicketTrackingHistory(ticketId);
+    final ticket = getTicketById(ticketId);
+    if (ticket == null) return 'Tiket tidak ditemukan';
+
+    final summaryParts = <String>[];
+    summaryParts.add('✓ Tiket dibuat oleh ${ticket.createdBy}');
+
+    if (ticket.receivedByAdminAt != null) {
+      summaryParts.add('✓ Diterima oleh admin');
+    }
+
+    if (ticket.forwardedToHelpdeskAt != null) {
+      summaryParts.add('✓ Diforward ke helpdesk');
+    }
+
+    if (ticket.completedAt != null) {
+      summaryParts.add('✓ Diselesaikan oleh helpdesk');
+    }
+
+    return summaryParts.join('\n');
+  }
+
+  /// Get visible tickets for current user based on their role
+  List<TicketModel> getVisibleTicketsForCurrentUser() {
+    final user = _currentUser;
+    if (user == null) return [];
+
+    if (user.role == 'user') {
+      // Users can only see their own tickets
+      return _tickets.where((t) {
+        return t.createdBy == user.id || t.createdBy == user.username;
+      }).toList();
+    } else if (user.role == 'admin') {
+      // Admins see semua tiket sampai status completed
+      return _tickets.where((t) => t.status != 'completed').toList();
+    } else if (user.role == 'helpdesk') {
+      // Helpdesk sees tiket yang ditugaskan atau tiket yang sedang diproses
+      return _tickets.where((t) {
+        return (t.assignedTo == user.id || t.assignedTo == user.username) ||
+            t.status == 'on_progress';
+      }).toList();
+    }
+
+    return [];
   }
 }

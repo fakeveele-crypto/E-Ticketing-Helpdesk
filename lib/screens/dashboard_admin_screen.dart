@@ -86,21 +86,23 @@ class _AdminHomeTab extends StatelessWidget {
                   children: [
                     Text(
                       'Dashboard',
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
+                      style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     Text(
                       'Halo, ${provider.currentUser?.name ?? ''}',
                       style: TextStyle(
-                          color: scheme.onSurfaceVariant, fontSize: 13),
+                        color: scheme.onSurfaceVariant,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: scheme.primaryContainer,
                     borderRadius: BorderRadius.circular(20),
@@ -122,10 +124,9 @@ class _AdminHomeTab extends StatelessWidget {
             // ── Statistik Tiket ──────────────────────────────
             Text(
               'Ringkasan Tiket',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
 
@@ -159,7 +160,7 @@ class _AdminHomeTab extends StatelessWidget {
                 Expanded(
                   child: _AdminStatCard(
                     label: 'Diproses',
-                    value: provider.onProgressTickets,
+                    value: provider.inProgressTickets,
                     icon: Icons.pending_actions_outlined,
                     color: Colors.orange,
                   ),
@@ -168,7 +169,7 @@ class _AdminHomeTab extends StatelessWidget {
                 Expanded(
                   child: _AdminStatCard(
                     label: 'Selesai',
-                    value: provider.resolvedTickets,
+                    value: provider.closedTickets,
                     icon: Icons.check_circle_outline,
                     color: Colors.green,
                   ),
@@ -184,15 +185,11 @@ class _AdminHomeTab extends StatelessWidget {
               children: [
                 Text(
                   'Tiket Terbaru Masuk',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                TextButton(
-                  onPressed: () {},
-                  child: const Text('Lihat semua'),
-                ),
+                TextButton(onPressed: () {}, child: const Text('Lihat semua')),
               ],
             ),
             const SizedBox(height: 8),
@@ -203,25 +200,34 @@ class _AdminHomeTab extends StatelessWidget {
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     children: [
-                      Icon(Icons.inbox_outlined,
-                          size: 60, color: scheme.onSurfaceVariant),
+                      Icon(
+                        Icons.inbox_outlined,
+                        size: 60,
+                        color: scheme.onSurfaceVariant,
+                      ),
                       const SizedBox(height: 12),
-                      Text('Belum ada tiket',
-                          style:
-                              TextStyle(color: scheme.onSurfaceVariant)),
+                      Text(
+                        'Belum ada tiket',
+                        style: TextStyle(color: scheme.onSurfaceVariant),
+                      ),
                     ],
                   ),
                 ),
               )
             else
-              ...provider.tickets.take(5).map(
+              ...provider.tickets
+                  .take(5)
+                  .map(
                     (t) => Card(
                       margin: const EdgeInsets.only(bottom: 10),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 4),
+                          horizontal: 14,
+                          vertical: 4,
+                        ),
                         leading: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
@@ -239,10 +245,12 @@ class _AdminHomeTab extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 14),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
                         ),
                         subtitle: Text(
-                          '${t.id} • ${t.createdBy}',
+                          '${t.ticketCode} • ${t.createdBy}',
                           style: const TextStyle(fontSize: 12),
                         ),
                         trailing: _StatusBadge(t.status),
@@ -257,10 +265,11 @@ class _AdminHomeTab extends StatelessWidget {
 
   Color _statusColor(String s) {
     switch (s) {
-      case 'open':
+      case 'new':
         return Colors.blue;
       case 'on_progress':
         return Colors.orange;
+      case 'completed':
       case 'resolved':
         return Colors.green;
       default:
@@ -318,10 +327,7 @@ class _AdminStatCard extends StatelessWidget {
               ),
               Text(
                 label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: color.withOpacity(0.85),
-                ),
+                style: TextStyle(fontSize: 12, color: color.withOpacity(0.85)),
               ),
             ],
           ),
@@ -339,9 +345,9 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final map = {
-      'open': ('Baru', Colors.blue),
+      'new': ('Baru', Colors.blue),
       'on_progress': ('Diproses', Colors.orange),
-      'resolved': ('Selesai', Colors.green),
+      'completed': ('Selesai', Colors.green),
       'closed': ('Ditutup', Colors.grey),
     };
     final (label, color) = map[status] ?? ('Unknown', Colors.grey);

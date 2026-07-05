@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import 'register_screen.dart';
 import 'dashboard_user_screen.dart';
 import 'dashboard_admin_screen.dart';
+import 'dashboard_helpdesk_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,31 +18,31 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscure = true;
   bool _loading = false;
 
-  void _login() async {
+  Future<void> _login() async {
     setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 800));
-
     final provider = context.read<AppProvider>();
-    final success = provider.login(_userCtrl.text.trim(), _passCtrl.text);
-
+    final success = await provider.login(_userCtrl.text.trim(), _passCtrl.text);
     setState(() => _loading = false);
-
     if (success) {
-      final role = provider.currentUser!.role;
+      final role = provider.currentUser?.role;
       if (!mounted) return;
+      Widget page;
+      if (role == 'admin') {
+        page = const DashboardAdminScreen();
+      } else if (role == 'helpdesk') {
+        page = const DashboardHelpdeskScreen();
+      } else {
+        page = const DashboardUserScreen();
+      }
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (_) => (role == 'admin' || role == 'helpdesk')
-              ? const DashboardAdminScreen()
-              : const DashboardUserScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => page),
       );
     } else {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Username atau password salah!'),
+          content: Text('Login gagal. Periksa username dan password Anda.'),
           backgroundColor: Colors.red,
         ),
       );

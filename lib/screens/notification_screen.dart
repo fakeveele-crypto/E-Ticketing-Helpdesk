@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../models/notification_model.dart';
@@ -31,16 +31,11 @@ class NotificationScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.notifications_none_outlined,
-                      size: 72, color: scheme.onSurfaceVariant),
+                  Icon(Icons.notifications_none_outlined, size: 72, color: scheme.onSurfaceVariant),
                   const SizedBox(height: 16),
-                  Text('Tidak ada notifikasi',
-                      style: TextStyle(
-                          fontSize: 16, color: scheme.onSurfaceVariant)),
+                  Text('Tidak ada notifikasi', style: TextStyle(fontSize: 16, color: scheme.onSurfaceVariant)),
                   const SizedBox(height: 8),
-                  Text('Notifikasi akan muncul di sini',
-                      style: TextStyle(
-                          fontSize: 13, color: scheme.onSurfaceVariant)),
+                  Text('Notifikasi akan muncul di sini', style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
                 ],
               ),
             )
@@ -52,19 +47,13 @@ class NotificationScreen extends StatelessWidget {
                 return _NotifTile(
                   notif: notif,
                   onTap: () {
-                    // Tandai sudah dibaca
                     provider.markOneRead(notif.id);
-
-                    // Navigasi ke detail tiket
                     final ticket = provider.getTicketById(notif.ticketId);
                     if (ticket != null) {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => TicketDetailScreen(
-                            ticket: ticket,
-                            isAdmin: isAdmin,
-                          ),
+                          builder: (_) => TicketDetailScreen(ticket: ticket, isAdmin: isAdmin),
                         ),
                       );
                     } else {
@@ -153,8 +142,7 @@ class _NotifTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(notif.message,
-                      style: TextStyle(
-                          fontSize: 13, color: scheme.onSurfaceVariant),
+                      style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 6),
@@ -162,15 +150,9 @@ class _NotifTile extends StatelessWidget {
                     children: [
                       Icon(Icons.access_time, size: 12, color: scheme.onSurfaceVariant),
                       const SizedBox(width: 4),
-                      Text(notif.timestamp,
-                          style: TextStyle(
-                              fontSize: 11, color: scheme.onSurfaceVariant)),
+                      Text(notif.createdAt, style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
                       const Spacer(),
-                      Text('Lihat tiket →',
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: scheme.primary,
-                              fontWeight: FontWeight.w500)),
+                      Text('Lihat tiket →', style: TextStyle(fontSize: 11, color: scheme.primary, fontWeight: FontWeight.w500)),
                     ],
                   ),
                 ],

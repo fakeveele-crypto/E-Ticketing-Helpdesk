@@ -17,7 +17,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    
+
     // Inisialisasi Kontroler Animasi
     _controller = AnimationController(
       vsync: this,
@@ -25,10 +25,11 @@ class _SplashScreenState extends State<SplashScreen>
     );
 
     _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
-    
-    _scaleAnim = Tween<double>(begin: 0.7, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
-    );
+
+    _scaleAnim = Tween<double>(
+      begin: 0.7,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.elasticOut));
 
     // Jalankan animasi saat halaman dimuat
     _controller.forward();
@@ -62,7 +63,6 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     // Gunakan warna primary aplikasi untuk background
-    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       backgroundColor: const Color(0xFF4F46E5), // Warna Biru Indigo

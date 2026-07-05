@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 
@@ -13,20 +13,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   bool _obscure = true;
+  bool _loading = false;
 
-  void _register() {
-    if (_nameCtrl.text.isEmpty || _userCtrl.text.isEmpty || _passCtrl.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Semua field harus diisi!')),
-      );
+  Future<void> _register() async {
+    if (_nameCtrl.text.isEmpty ||
+        _userCtrl.text.isEmpty ||
+        _passCtrl.text.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Semua field harus diisi!')));
       return;
     }
-    final success = context.read<AppProvider>().register(
-          _userCtrl.text.trim(),
-          _passCtrl.text,
-          _nameCtrl.text.trim(),
-        );
+
+    setState(() => _loading = true);
+    final provider = context.read<AppProvider>();
+    final success = await provider.register(
+      _userCtrl.text.trim(),
+      _passCtrl.text,
+      _nameCtrl.text.trim(),
+    );
+    setState(() => _loading = false);
+
+    final errorMessage = provider.authErrorMessage;
     if (success) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Registrasi berhasil! Silakan login.'),
@@ -35,8 +45,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       Navigator.pop(context);
     } else {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Username sudah digunakan!'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(
+            errorMessage ??
+                'Registrasi gagal. Username mungkin sudah terdaftar.',
+          ),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -51,16 +68,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Buat Akun', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              'Buat Akun',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
-            Text('Isi data diri Anda untuk mendaftar', style: TextStyle(color: scheme.onSurfaceVariant)),
+            Text(
+              'Isi data diri Anda untuk mendaftar',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
             const SizedBox(height: 32),
             TextField(
               controller: _nameCtrl,
               decoration: InputDecoration(
                 labelText: 'Nama Lengkap',
                 prefixIcon: const Icon(Icons.badge_outlined),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -69,7 +96,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               decoration: InputDecoration(
                 labelText: 'Username',
                 prefixIcon: const Icon(Icons.person_outline),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -80,10 +109,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 labelText: 'Password',
                 prefixIcon: const Icon(Icons.lock_outline),
                 suffixIcon: IconButton(
-                  icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+                  icon: Icon(
+                    _obscure ? Icons.visibility_off : Icons.visibility,
+                  ),
                   onPressed: () => setState(() => _obscure = !_obscure),
                 ),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
             const SizedBox(height: 32),
@@ -91,9 +124,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
               width: double.infinity,
               height: 52,
               child: FilledButton(
-                onPressed: _register,
-                style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                child: const Text('Daftar', style: TextStyle(fontSize: 16)),
+                onPressed: _loading ? null : _register,
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: _loading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('Daftar', style: TextStyle(fontSize: 16)),
               ),
             ),
           ],

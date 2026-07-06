@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
+import 'create_ticket_screen.dart';
 import 'ticket_list_screen.dart';
 import 'notification_screen.dart';
 import 'profile_screen.dart';
@@ -177,6 +178,24 @@ class _AdminHomeTab extends StatelessWidget {
               ],
             ),
 
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CreateTicketScreen()),
+                ),
+                icon: const Icon(Icons.add),
+                label: const Text('Buat Tiket Baru', style: TextStyle(fontSize: 16)),
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 28),
 
             // ── Tiket Terbaru ────────────────────────────────

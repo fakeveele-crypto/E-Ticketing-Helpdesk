@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/ticket_model.dart';
 import '../providers/app_provider.dart';
+import 'create_ticket_screen.dart';
 import 'ticket_list_screen.dart';
 import 'notification_screen.dart';
 import 'profile_screen.dart';
@@ -128,6 +129,24 @@ class _HelpdeskHomeTab extends StatelessWidget {
                   color: Colors.green,
                 ),
               ],
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CreateTicketScreen()),
+                ),
+                icon: const Icon(Icons.add),
+                label: const Text('Buat Tiket Baru', style: TextStyle(fontSize: 16)),
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
             ),
             const SizedBox(height: 24),
             Text(

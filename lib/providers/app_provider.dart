@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/notification_model.dart';
 import '../models/ticket_model.dart';
@@ -102,6 +102,19 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> resetPassword(String usernameOrEmail) async {
+    try {
+      final email = _authEmail(usernameOrEmail);
+      await Supabase.instance.client.auth.resetPasswordForEmail(email);
+      _authErrorMessage = null;
+      return true;
+    } catch (error) {
+      _authErrorMessage = error.toString();
+      debugPrint('Reset password failed: $_authErrorMessage');
+      return false;
+    }
+  }
+
   Future<void> logout() async {
     await _unsubscribeRealtime();
     await Supabase.instance.client.auth.signOut();
@@ -193,9 +206,7 @@ class AppProvider extends ChangeNotifier {
   /// (migration belum dijalankan), gagal dengan aman tanpa meng-crash app.
   Future<void> fetchProfiles() async {
     try {
-      final response = await Supabase.instance.client
-          .from('profiles')
-          .select();
+      final response = await Supabase.instance.client.from('profiles').select();
       final rows = response as List<dynamic>? ?? [];
       _profileNames.clear();
       final helpdesk = <UserModel>[];

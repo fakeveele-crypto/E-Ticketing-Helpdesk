@@ -5,6 +5,7 @@ import 'register_screen.dart';
 import 'dashboard_user_screen.dart';
 import 'dashboard_admin_screen.dart';
 import 'dashboard_helpdesk_screen.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -122,13 +123,12 @@ class _LoginScreenState extends State<LoginScreen> {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Fitur reset password segera hadir'),
-                      ),
-                    );
-                  },
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ForgotPasswordScreen(),
+                    ),
+                  ),
                   child: const Text('Lupa Password?'),
                 ),
               ),

@@ -421,9 +421,12 @@ class _AdminTicketActionsWidgetState extends State<AdminTicketActionsWidget> {
   }
 
   Future<List<UserModel>> _getHelpdeskUsers(AppProvider provider) async {
-    // This should query your user database for helpdesk staff
-    // For now, returning empty list - implement based on your backend
-    return [];
+    // Pastikan daftar terbaru (misal ada helpdesk baru daftar) sebelum
+    // menampilkan dropdown.
+    if (provider.helpdeskUsers.isEmpty) {
+      await provider.fetchProfiles();
+    }
+    return provider.helpdeskUsers;
   }
 }
 
@@ -458,7 +461,7 @@ class _HelpdeskTicketActionsWidgetState extends State<HelpdeskTicketActionsWidge
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
-              if (ticket.status == 'in_progress' && ticket.completedAt == null)
+              if (ticket.status == 'on_progress' && ticket.completedAt == null)
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(

@@ -12,14 +12,32 @@ class AppProvider extends ChangeNotifier {
   Map<String, List<TicketTrackingModel>> _ticketTracking = {};
   String? _authErrorMessage;
 
+  // Daftar semua profil (untuk dropdown helpdesk & menampilkan nama asli)
+  List<UserModel> _helpdeskUsers = [];
+  final Map<String, String> _profileNames = {};
+
+  // Realtime channels — dibuka saat login, ditutup saat logout
+  RealtimeChannel? _ticketsChannel;
+  RealtimeChannel? _commentsChannel;
+  RealtimeChannel? _trackingChannel;
+  RealtimeChannel? _notificationsChannel;
+
   bool get isDarkMode => _isDarkMode;
   UserModel? get currentUser => _currentUser;
   List<TicketModel> get tickets => _tickets;
   List<NotificationModel> get notifications => _notifications;
   Map<String, List<TicketTrackingModel>> get ticketTracking => _ticketTracking;
   String? get authErrorMessage => _authErrorMessage;
+  List<UserModel> get helpdeskUsers => _helpdeskUsers;
 
   AppProvider();
+
+  /// Nama tampilan untuk sebuah id/username user (fallback ke value aslinya
+  /// kalau belum ada di cache profil).
+  String displayNameFor(String? idOrUsername) {
+    if (idOrUsername == null || idOrUsername.isEmpty) return '-';
+    return _profileNames[idOrUsername] ?? idOrUsername;
+  }
 
   String _authEmail(String username) {
     final trimmed = username.trim().toLowerCase();
@@ -76,6 +94,7 @@ class AppProvider extends ChangeNotifier {
       }
       _currentUser = _userFromAuthUser(response.user!);
       await loadData();
+      _subscribeRealtime();
       notifyListeners();
       return true;
     } catch (_) {
@@ -84,11 +103,79 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    await _unsubscribeRealtime();
     await Supabase.instance.client.auth.signOut();
     _currentUser = null;
     _tickets = [];
     _notifications = [];
+    _ticketTracking = {};
+    _helpdeskUsers = [];
+    _profileNames.clear();
     notifyListeners();
+  }
+
+  /// Buka channel Supabase Realtime supaya tiket, komentar, tracking, dan
+  /// notifikasi otomatis ter-update tanpa perlu logout-login ulang.
+  void _subscribeRealtime() {
+    final client = Supabase.instance.client;
+
+    _ticketsChannel = client
+        .channel('public:tickets')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'tickets',
+          callback: (payload) => fetchTickets(),
+        )
+        .subscribe();
+
+    _commentsChannel = client
+        .channel('public:ticket_comments')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'ticket_comments',
+          callback: (payload) => fetchTickets(),
+        )
+        .subscribe();
+
+    _trackingChannel = client
+        .channel('public:ticket_tracking')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'ticket_tracking',
+          callback: (payload) => fetchTicketTracking(),
+        )
+        .subscribe();
+
+    _notificationsChannel = client
+        .channel('public:notifications')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'notifications',
+          callback: (payload) => fetchNotifications(),
+        )
+        .subscribe();
+  }
+
+  Future<void> _unsubscribeRealtime() async {
+    final client = Supabase.instance.client;
+    if (_ticketsChannel != null) await client.removeChannel(_ticketsChannel!);
+    if (_commentsChannel != null) {
+      await client.removeChannel(_commentsChannel!);
+    }
+    if (_trackingChannel != null) {
+      await client.removeChannel(_trackingChannel!);
+    }
+    if (_notificationsChannel != null) {
+      await client.removeChannel(_notificationsChannel!);
+    }
+    _ticketsChannel = null;
+    _commentsChannel = null;
+    _trackingChannel = null;
+    _notificationsChannel = null;
   }
 
   void toggleDarkMode() {
@@ -97,8 +184,51 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> loadData() async {
-    await Future.wait([fetchTickets(), fetchNotifications()]);
+    await Future.wait([fetchTickets(), fetchNotifications(), fetchProfiles()]);
     await fetchTicketTracking();
+  }
+
+  /// Ambil semua profil (untuk cache nama tampilan) dan daftar user helpdesk
+  /// (untuk dropdown "Assign ke Helpdesk"). Kalau tabel `profiles` belum ada
+  /// (migration belum dijalankan), gagal dengan aman tanpa meng-crash app.
+  Future<void> fetchProfiles() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select();
+      final rows = response as List<dynamic>? ?? [];
+      _profileNames.clear();
+      final helpdesk = <UserModel>[];
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final id = map['id']?.toString() ?? '';
+        final username = map['username']?.toString() ?? '';
+        final name = map['name']?.toString().isNotEmpty == true
+            ? map['name'].toString()
+            : username;
+        final role = map['role']?.toString() ?? 'user';
+        if (id.isEmpty) continue;
+        _profileNames[id] = name;
+        if (username.isNotEmpty) _profileNames[username] = name;
+        if (role == 'helpdesk') {
+          helpdesk.add(
+            UserModel(
+              id: id,
+              username: username,
+              name: name,
+              role: role,
+              email: map['email']?.toString() ?? '',
+            ),
+          );
+        }
+      }
+      _helpdeskUsers = helpdesk;
+      notifyListeners();
+    } catch (error) {
+      debugPrint(
+        'Fetch profiles failed (pastikan tabel `profiles` sudah dibuat via DATABASE_MIGRATION.sql): $error',
+      );
+    }
   }
 
   Future<void> fetchTickets() async {
@@ -252,58 +382,35 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> assignTicket(String ticketId, String assignTo) async {
-    final idx = _tickets.indexWhere((t) => t.id == ticketId);
-    if (idx == -1) return;
-    final ticket = _tickets[idx];
-    await Supabase.instance.client
-        .from('tickets')
-        .update({
-          'assigned_to': assignTo,
-          'status': 'on_progress',
-          'updated_at': DateTime.now().toIso8601String(),
-        })
-        .eq('id', ticketId)
-        .select()
-        .single();
-    ticket.assignedTo = assignTo;
-    ticket.status = 'on_progress';
-    await _addSystemComment(
-      ticketId,
-      'Tiket ditugaskan kepada $assignTo dan status diubah menjadi Diproses.',
-    );
-    await _addNotification(
-      title: 'Tiket Ditugaskan',
-      message: 'Tiket ${ticket.ticketCode} telah ditugaskan kepada Anda.',
-      ticketId: ticketId,
-      recipientId: assignTo,
-    );
-    await _addNotification(
-      title: 'Tiket Sedang Diproses',
-      message: 'Tiket ${ticket.ticketCode} sedang diproses oleh $assignTo.',
-      ticketId: ticketId,
-      recipientId: ticket.createdBy,
-    );
-    notifyListeners();
-  }
-
+  /// Catatan bug lama: kolom `ticket_comments.user_id` bertipe UUID, tapi
+  /// sebelumnya di-insert dengan `_currentUser!.username` (string biasa).
+  /// Insert itu gagal ("invalid input syntax for type uuid") dan karena
+  /// dipanggil tanpa try/catch di tengah forwardTicketToHelpdesk(), satu
+  /// error ini menghentikan seluruh proses assign sebelum notifikasi ke
+  /// helpdesk sempat dibuat. Sekarang pakai `_currentUser!.id` (uuid asli
+  /// dari Supabase Auth) dan dibungkus try/catch supaya gagal komentar
+  /// sistem tidak pernah menggagalkan alur utama (assign/complete/dsb).
   Future<void> _addSystemComment(String ticketId, String message) async {
     if (_currentUser == null) return;
-    final response = await Supabase.instance.client
-        .from('ticket_comments')
-        .insert({
-          'ticket_id': ticketId,
-          'user_id': _currentUser!.username,
-          'message': message,
-        })
-        .select()
-        .single();
-    final comment = CommentModel.fromMap(
-      Map<String, dynamic>.from(response as Map),
-    );
-    final idx = _tickets.indexWhere((t) => t.id == ticketId);
-    if (idx != -1) {
-      _tickets[idx].comments.add(comment);
+    try {
+      final response = await Supabase.instance.client
+          .from('ticket_comments')
+          .insert({
+            'ticket_id': ticketId,
+            'user_id': _currentUser!.id,
+            'message': message,
+          })
+          .select()
+          .single();
+      final comment = CommentModel.fromMap(
+        Map<String, dynamic>.from(response as Map),
+      );
+      final idx = _tickets.indexWhere((t) => t.id == ticketId);
+      if (idx != -1) {
+        _tickets[idx].comments.add(comment);
+      }
+    } catch (error) {
+      debugPrint('Add system comment failed: $error');
     }
   }
 
@@ -315,7 +422,7 @@ class AppProvider extends ChangeNotifier {
         .from('ticket_comments')
         .insert({
           'ticket_id': ticketId,
-          'user_id': _currentUser!.username,
+          'user_id': _currentUser!.id,
           'message': message,
         })
         .select()
@@ -774,10 +881,9 @@ class AppProvider extends ChangeNotifier {
       // Admins see semua tiket sampai status completed
       return _tickets.where((t) => t.status != 'completed').toList();
     } else if (user.role == 'helpdesk') {
-      // Helpdesk sees tiket yang ditugaskan atau tiket yang sedang diproses
+      // Helpdesk hanya melihat tiket yang ditugaskan ke dirinya sendiri
       return _tickets.where((t) {
-        return (t.assignedTo == user.id || t.assignedTo == user.username) ||
-            t.status == 'on_progress';
+        return t.assignedTo == user.id || t.assignedTo == user.username;
       }).toList();
     }
 

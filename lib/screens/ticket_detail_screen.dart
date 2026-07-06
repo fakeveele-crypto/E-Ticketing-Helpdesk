@@ -176,7 +176,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ),
         centerTitle: true,
         actions: [
-          if (widget.isAdmin || provider.currentUser?.role == 'helpdesk')
+          if (widget.isAdmin)
             IconButton(
               onPressed: () => _showStatusSheet(context, provider, ticket),
               icon: const Icon(Icons.edit_note_rounded),
@@ -264,7 +264,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        ticket.createdBy,
+                        provider.displayNameFor(ticket.createdBy),
                         style: TextStyle(
                           fontSize: 13,
                           color: scheme.onSurfaceVariant,
@@ -344,53 +344,26 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                             ),
                           ),
                           Text(
-                            ticket.assignedTo!,
+                            provider.displayNameFor(ticket.assignedTo),
                             style: TextStyle(color: scheme.primary),
                           ),
                         ],
                       ),
                     ),
-                  ] else if (widget.isAdmin) ...[
+                  ],
+                  // Aksi khusus admin: terima tiket lalu forward ke helpdesk
+                  // lewat dropdown (bukan lagi ketik UUID manual).
+                  if (widget.isAdmin) ...[
                     const Divider(height: 28),
-                    FilledButton.icon(
-                      onPressed: () async {
-                        final helpdesk = await showDialog<String>(
-                          context: context,
-                          builder: (context) {
-                            final idCtrl = TextEditingController();
-                            return AlertDialog(
-                              title: const Text('Assign ke Helpdesk'),
-                              content: TextField(
-                                controller: idCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: 'ID Helpdesk (UUID)',
-                                  hintText: 'Masukkan ID Helpdesk yang valid',
-                                ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('Batal'),
-                                ),
-                                FilledButton(
-                                  onPressed: () => Navigator.pop(
-                                    context,
-                                    idCtrl.text.trim(),
-                                  ),
-                                  child: const Text('Assign'),
-                                ),
-                              ],
-                            );
-                          },
-                        );
-                        if (helpdesk != null && helpdesk.isNotEmpty) {
-                          await provider.assignTicket(ticket.id, helpdesk);
-                          setState(() {});
-                        }
-                      },
-                      icon: const Icon(Icons.assignment_ind),
-                      label: const Text('Assign ke Helpdesk'),
-                    ),
+                    AdminTicketActionsWidget(ticketId: ticket.id),
+                  ],
+                  // Aksi khusus helpdesk: tandai tiket selesai.
+                  if (provider.currentUser?.role == 'helpdesk' &&
+                      (ticket.assignedTo == provider.currentUser?.id ||
+                          ticket.assignedTo ==
+                              provider.currentUser?.username)) ...[
+                    const Divider(height: 28),
+                    HelpdeskTicketActionsWidget(ticketId: ticket.id),
                   ],
                   const Divider(height: 28),
                   Text(
@@ -432,8 +405,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                                   radius: 14,
                                   backgroundColor: scheme.primaryContainer,
                                   child: Text(
-                                    c.userId.isNotEmpty
-                                        ? c.userId[0].toUpperCase()
+                                    provider
+                                            .displayNameFor(c.userId)
+                                            .isNotEmpty
+                                        ? provider
+                                            .displayNameFor(c.userId)[0]
+                                            .toUpperCase()
                                         : 'U',
                                     style: TextStyle(
                                       fontSize: 12,
@@ -444,7 +421,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  c.userId,
+                                  provider.displayNameFor(c.userId),
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13,
@@ -511,12 +488,19 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
-                  onPressed: () {
+                  onPressed: () async {
                     final text = _commentCtrl.text.trim();
                     if (text.isEmpty) return;
-                    provider.addComment(ticket.id, text);
                     _commentCtrl.clear();
                     FocusScope.of(context).unfocus();
+                    try {
+                      await provider.addComment(ticket.id, text);
+                    } catch (error) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Gagal mengirim komentar: $error')),
+                      );
+                    }
                   },
                   style: FilledButton.styleFrom(
                     shape: const CircleBorder(),

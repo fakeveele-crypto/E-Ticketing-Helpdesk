@@ -621,14 +621,10 @@ class AppProvider extends ChangeNotifier {
     if (_currentUser == null || _currentUser!.role == 'user') {
       throw Exception('Hanya admin yang dapat memforward tiket ke helpdesk.');
     }
-
     final idx = _tickets.indexWhere((t) => t.id == ticketId);
     if (idx == -1) return;
-
     final ticket = _tickets[idx];
     final now = DateTime.now().toIso8601String();
-
-    // Update ticket in database
     await Supabase.instance.client
         .from('tickets')
         .update({
@@ -640,26 +636,19 @@ class AppProvider extends ChangeNotifier {
         .eq('id', ticketId)
         .select()
         .single();
-
     ticket.assignedTo = helpdeskUserId;
     ticket.status = 'on_progress';
     ticket.forwardedToHelpdeskAt = now;
-
-    // Add tracking entry
     await _addTracking(
       ticketId: ticketId,
       action: 'forwarded_to_helpdesk',
       description:
           'Tiket diforward ke helpdesk oleh admin ${_currentUser!.name}',
     );
-
-    // Add system comment
     await _addSystemComment(
       ticketId,
       'Tiket diforward ke helpdesk oleh ${_currentUser!.name} untuk ditangani.',
     );
-
-    // Notify helpdesk
     await _addNotification(
       title: 'Tiket Baru dari Admin',
       message:
@@ -667,15 +656,12 @@ class AppProvider extends ChangeNotifier {
       ticketId: ticketId,
       recipientId: helpdeskUserId,
     );
-
-    // Notify ticket creator
     await _addNotification(
       title: 'Tiket Sedang Diproses Helpdesk',
       message: 'Tiket ${ticket.ticketCode} sedang diproses oleh tim helpdesk.',
       ticketId: ticketId,
       recipientId: ticket.createdBy,
     );
-
     notifyListeners();
   }
 

@@ -140,7 +140,10 @@ class _HelpdeskHomeTab extends StatelessWidget {
                   MaterialPageRoute(builder: (_) => const CreateTicketScreen()),
                 ),
                 icon: const Icon(Icons.add),
-                label: const Text('Buat Tiket Baru', style: TextStyle(fontSize: 16)),
+                label: const Text(
+                  'Buat Tiket Baru',
+                  style: TextStyle(fontSize: 16),
+                ),
                 style: FilledButton.styleFrom(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),

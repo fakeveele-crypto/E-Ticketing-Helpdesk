@@ -12,8 +12,9 @@ class AppProvider extends ChangeNotifier {
   Map<String, List<TicketTrackingModel>> _ticketTracking = {};
   String? _authErrorMessage;
 
-  // Daftar semua profil (untuk dropdown helpdesk & menampilkan nama asli)
+  // Daftar semua profil (untuk dropdown helpdesk, menampilkan nama asli, dan kelola pengguna)
   List<UserModel> _helpdeskUsers = [];
+  List<UserModel> _allUsers = [];
   final Map<String, String> _profileNames = {};
 
   // Realtime channels — dibuka saat login, ditutup saat logout
@@ -29,6 +30,7 @@ class AppProvider extends ChangeNotifier {
   Map<String, List<TicketTrackingModel>> get ticketTracking => _ticketTracking;
   String? get authErrorMessage => _authErrorMessage;
   List<UserModel> get helpdeskUsers => _helpdeskUsers;
+  List<UserModel> get allUsers => _allUsers;
 
   AppProvider();
 
@@ -123,6 +125,7 @@ class AppProvider extends ChangeNotifier {
     _notifications = [];
     _ticketTracking = {};
     _helpdeskUsers = [];
+    _allUsers = [];
     _profileNames.clear();
     notifyListeners();
   }
@@ -210,6 +213,7 @@ class AppProvider extends ChangeNotifier {
       final rows = response as List<dynamic>? ?? [];
       _profileNames.clear();
       final helpdesk = <UserModel>[];
+      final allUsers = <UserModel>[];
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
         final id = map['id']?.toString() ?? '';
@@ -221,18 +225,19 @@ class AppProvider extends ChangeNotifier {
         if (id.isEmpty) continue;
         _profileNames[id] = name;
         if (username.isNotEmpty) _profileNames[username] = name;
+        final userProfile = UserModel(
+          id: id,
+          username: username,
+          name: name,
+          role: role,
+          email: map['email']?.toString() ?? '',
+        );
+        allUsers.add(userProfile);
         if (role == 'helpdesk') {
-          helpdesk.add(
-            UserModel(
-              id: id,
-              username: username,
-              name: name,
-              role: role,
-              email: map['email']?.toString() ?? '',
-            ),
-          );
+          helpdesk.add(userProfile);
         }
       }
+      _allUsers = allUsers;
       _helpdeskUsers = helpdesk;
       notifyListeners();
     } catch (error) {
@@ -240,6 +245,19 @@ class AppProvider extends ChangeNotifier {
         'Fetch profiles failed (pastikan tabel `profiles` sudah dibuat via DATABASE_MIGRATION.sql): $error',
       );
     }
+  }
+
+  Future<void> updateUserRole(String userId, String newRole) async {
+    if (userId.isEmpty) {
+      throw Exception('User ID tidak valid');
+    }
+
+    await Supabase.instance.client
+        .from('profiles')
+        .update({'role': newRole})
+        .eq('id', userId);
+
+    await fetchProfiles();
   }
 
   Future<void> fetchTickets() async {
